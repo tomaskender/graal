@@ -64,20 +64,32 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
         this.inliningUtils = inliningUtils;
     }
 
-    @Override
-    protected boolean shouldInlineInvoke(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
+    private boolean logDecision(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
+        boolean decision = true;
+        boolean madeDecision = false;
         if (inliningUtils.alwaysInlineInvoke((AnalysisMetaAccess) b.getMetaAccess(), method)) {
-            return true;
+            decision = true;
+            madeDecision = true;
         }
-        if (b.getDepth() >= maxInliningDepth) {
-            return false;
+        if (!madeDecision && b.getDepth() >= maxInliningDepth) {
+            decision = false;
+            madeDecision = true;
         }
-        if (b.recursiveInliningDepth(method) > 0) {
+        if (!madeDecision && b.recursiveInliningDepth(method) > 0) {
             /* Prevent recursive inlining. */
-            return false;
+            decision = false;
+            madeDecision = true;
         }
 
-        return InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
+        if (!madeDecision)
+            decision = InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
+        System.err.println(method.getQualifiedName() + " " + b.bci() + ": " + decision);
+        return decision;
+    }
+
+    @Override
+    protected boolean shouldInlineInvoke(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
+        return logDecision(b, method, args);
     }
 
     @Override
