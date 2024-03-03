@@ -36,6 +36,16 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
+import jdk.graal.compiler.util.json.JSONParser;
+import org.graalvm.collections.EconomicMap;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The defaults for node limits are very conservative. Only small methods should be inlined. The
@@ -64,20 +74,60 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
         this.inliningUtils = inliningUtils;
     }
 
+    private boolean getPredictionFromEndpoint(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
+        boolean decision = false;
+        try {
+            URL url = new URL("http://localhost:8001/predict");
+
+            // Open a connection
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+
+            boolean alwaysInlineInvoke = inliningUtils.alwaysInlineInvoke((AnalysisMetaAccess) b.getMetaAccess(), method);
+            int depth = b.getDepth();
+            int recursiveDepth = b.recursiveInliningDepth(method);
+            boolean inliningAllowed = InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
+
+            String postData = "{" +
+                    "'alwaysInlineInvoke': " + alwaysInlineInvoke + ", " +
+                    "'depth': " + depth + ", " +
+                    "'recursiveInliningDepth': " + recursiveDepth + ", "  +
+                    "'inliningAllowed': " + inliningAllowed +
+                    "}";
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = postData.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            int responseCode = conn.getResponseCode();
+
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                String inputLine;
+                StringBuilder response = new StringBuilder();
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    Object result = new JSONParser(String.valueOf(response)).parse();
+                    EconomicMap<String, Object> map = (EconomicMap<String, Object>) result;
+                    decision = Boolean.parseBoolean(map.get("result").toString());
+                } else {
+                    System.out.println("Error in API call: " + response + ", args used: " + postData);
+                }
+            }
+            conn.disconnect();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return decision;
+    }
+
     @Override
     protected boolean shouldInlineInvoke(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
-        if (inliningUtils.alwaysInlineInvoke((AnalysisMetaAccess) b.getMetaAccess(), method)) {
-            return true;
-        }
-        if (b.getDepth() >= maxInliningDepth) {
-            return false;
-        }
-        if (b.recursiveInliningDepth(method) > 0) {
-            /* Prevent recursive inlining. */
-            return false;
-        }
-
-        return InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
+        return getPredictionFromEndpoint(b, method, args);
     }
 
     @Override
