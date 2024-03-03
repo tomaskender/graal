@@ -83,7 +83,7 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
 
         if (!madeDecision)
             decision = InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
-        System.err.println(method.getQualifiedName() + " " + b.bci() + ": " + decision);
+        System.err.println(method.getQualifiedName() + " // " + b.getMethod().getName() + " // " + b.bci() + " : " + decision);
         return decision;
     }
 
