@@ -39,13 +39,11 @@ import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.util.json.JSONParser;
 import org.graalvm.collections.EconomicMap;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 /**
  * The defaults for node limits are very conservative. Only small methods should be inlined. The
@@ -77,13 +75,11 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
     private boolean getPredictionFromEndpoint(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
         boolean decision = false;
         try {
-            URL url = new URL("http://localhost:8001/predict");
-
             // Open a connection
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
+//            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+//            conn.setRequestMethod("POST");
+//            conn.setRequestProperty("Content-Type", "application/json");
+//            conn.setDoOutput(true);
 
             boolean alwaysInlineInvoke = inliningUtils.alwaysInlineInvoke((AnalysisMetaAccess) b.getMetaAccess(), method);
             int depth = b.getDepth();
@@ -96,30 +92,22 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
                     "'recursiveInliningDepth': " + recursiveDepth + ", "  +
                     "'inliningAllowed': " + inliningAllowed +
                     "}";
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = postData.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:8001/predict"))
+                    .POST(HttpRequest.BodyPublishers.ofString(postData))
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == HttpURLConnection.HTTP_OK) {
+                Object result = new JSONParser(response.body()).parse();
+                EconomicMap<String, Object> map = (EconomicMap<String, Object>) result;
+                decision = Boolean.parseBoolean(map.get("result").toString());
+            } else {
+                System.out.println("Error in API call: " + response + ", args used: " + postData);
             }
-
-            int responseCode = conn.getResponseCode();
-
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                String inputLine;
-                StringBuilder response = new StringBuilder();
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    Object result = new JSONParser(String.valueOf(response)).parse();
-                    EconomicMap<String, Object> map = (EconomicMap<String, Object>) result;
-                    decision = Boolean.parseBoolean(map.get("result").toString());
-                } else {
-                    System.out.println("Error in API call: " + response + ", args used: " + postData);
-                }
-            }
-            conn.disconnect();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return decision;
