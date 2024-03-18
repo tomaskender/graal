@@ -614,6 +614,7 @@ suite = {
             "requires" : [
                 "jdk.jfr",
                 "jdk.management",
+                "java.net.http",
             ],
             "requiresConcealed" : {
                 "java.base" : [
@@ -1471,6 +1472,8 @@ suite = {
                 "requires": [
                     "java.management",
                     "jdk.management",
+                    "java.base",
+                    "java.net.http",
                 ],
                 "uses" : [
                     "org.graalvm.nativeimage.Platform",
@@ -1933,6 +1936,7 @@ suite = {
               "requires": [
                 "java.management",
                 "jdk.management",
+                "java.net.http",
               ],
               "requiresConcealed" : {
                 "java.management": [
@@ -1944,6 +1948,9 @@ suite = {
                   "jdk.vm.ci.code",
                   "jdk.vm.ci.runtime",
                 ],
+#                 "java.net.http": [
+#                     "sun.net.www.http"
+#                 ]
               }
             },
             "noMavenJavadoc": True,

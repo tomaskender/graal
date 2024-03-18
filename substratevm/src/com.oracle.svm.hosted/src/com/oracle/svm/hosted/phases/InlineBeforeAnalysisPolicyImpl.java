@@ -75,27 +75,22 @@ public class InlineBeforeAnalysisPolicyImpl extends InlineBeforeAnalysisPolicy {
     private boolean getPredictionFromEndpoint(GraphBuilderContext b, AnalysisMethod method, ValueNode[] args) {
         boolean decision = false;
         try {
-            // Open a connection
-//            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-//            conn.setRequestMethod("POST");
-//            conn.setRequestProperty("Content-Type", "application/json");
-//            conn.setDoOutput(true);
-
             boolean alwaysInlineInvoke = inliningUtils.alwaysInlineInvoke((AnalysisMetaAccess) b.getMetaAccess(), method);
             int depth = b.getDepth();
             int recursiveDepth = b.recursiveInliningDepth(method);
             boolean inliningAllowed = InlineBeforeAnalysisPolicyUtils.inliningAllowed(hostVM, b, method);
 
             String postData = "{" +
-                    "'alwaysInlineInvoke': " + alwaysInlineInvoke + ", " +
-                    "'depth': " + depth + ", " +
-                    "'recursiveInliningDepth': " + recursiveDepth + ", "  +
-                    "'inliningAllowed': " + inliningAllowed +
+                    "\"alwaysInlineInvoke\": " + alwaysInlineInvoke + ", " +
+                    "\"depth\": " + depth + ", " +
+                    "\"recursiveInliningDepth\": " + recursiveDepth + ", "  +
+                    "\"inliningAllowed\": " + inliningAllowed +
                     "}";
 
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("http://localhost:8001/predict"))
+                    .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(postData))
                     .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
