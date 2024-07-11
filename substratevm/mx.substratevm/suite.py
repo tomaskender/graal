@@ -514,7 +514,8 @@ suite = {
                 "com.oracle.svm.common",
             ],
             "requires" : [
-                "jdk.internal.vm.ci"
+                "jdk.internal.vm.ci",
+                "java.net.http"
             ],
             "requiresConcealed" : {
                 "java.base" : [
@@ -616,6 +617,7 @@ suite = {
             "requires" : [
                 "jdk.jfr",
                 "jdk.management",
+                "java.net.http",
             ],
             "requiresConcealed" : {
                 "java.base" : [
@@ -1473,6 +1475,8 @@ suite = {
                     "com.oracle.svm.hosted.reflect                to jdk.graal.compiler",
                 ],
                 "requires": [
+                    "java.base",
+                    "java.net.http",
                     "java.management",
                     "jdk.management",
                     "transitive org.graalvm.nativeimage",
@@ -1992,6 +1996,7 @@ suite = {
               ],
               "requires": [
                 "java.management",
+                "java.net.http",
                 "jdk.management",
                 "org.graalvm.collections",
                 "org.graalvm.nativeimage",
@@ -2034,6 +2039,7 @@ suite = {
                 ],
                 "requires": [
                     "java.management",
+                    "java.net.http",
                     "jdk.management",
                     "org.graalvm.nativeimage",
                 ],

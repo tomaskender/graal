@@ -890,6 +890,10 @@ public class SVMHost extends HostVM {
         return super.isFieldIncluded(bb, field);
     }
 
+    public boolean inliningAllowed(AnalysisMethod caller, AnalysisMethod callee) {
+        return InlineBeforeAnalysisPolicyUtils.inliningAllowed(this, caller, callee);
+    }
+
     private final List<BiPredicate<AnalysisMethod, AnalysisMethod>> neverInlineTrivialHandlers = new CopyOnWriteArrayList<>();
 
     public void registerNeverInlineTrivialHandler(BiPredicate<AnalysisMethod, AnalysisMethod> handler) {

@@ -201,6 +201,10 @@ public class InlineBeforeAnalysisPolicyUtils {
 
     public static boolean inliningAllowed(SVMHost hostVM, GraphBuilderContext b, AnalysisMethod callee) {
         AnalysisMethod caller = (AnalysisMethod) b.getMethod();
+        return inliningAllowed(hostVM, caller, callee);
+    }
+
+    public static boolean inliningAllowed(SVMHost hostVM, AnalysisMethod caller, AnalysisMethod callee) {
         if (hostVM.neverInlineTrivial(caller, callee)) {
             return false;
         }

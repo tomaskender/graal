@@ -842,7 +842,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     private final LoopExplosionPlugin loopExplosionPlugin;
     private final InvocationPlugins invocationPlugins;
-    private final InlineInvokePlugin[] inlineInvokePlugins;
+    public final InlineInvokePlugin[] inlineInvokePlugins;
     private final ParameterPlugin parameterPlugin;
     private final NodePlugin[] nodePlugins;
     private final ConcurrentHashMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;

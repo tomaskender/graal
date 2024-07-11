@@ -30,10 +30,21 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.util.ClassUtil;
 
 import jdk.graal.compiler.debug.DebugContext;
+import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import jdk.graal.compiler.options.Option;
 import jdk.graal.compiler.options.OptionKey;
+import jdk.graal.compiler.phases.common.inlining.InliningUtil;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
+import jdk.graal.compiler.util.json.JsonParser;
+import org.graalvm.collections.EconomicMap;
+
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 /**
  * Inlining before the static analysis improves the precision of the analysis especially when
@@ -57,8 +68,55 @@ public class InlineBeforeAnalysis {
         public static final OptionKey<Boolean> InlineBeforeAnalysis = new OptionKey<>(true);
     }
 
+    protected static HttpClient client = HttpClient.newHttpClient();
+
+    protected static boolean shouldInline(Invoke invoke) {
+        String postData = "{\n" +
+                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
+                "\"codeSize\": "+invoke.getTargetMethod().getCodeSize() + ",\n" +
+                "\"maxStackSize\": "+invoke.getTargetMethod().getMaxStackSize() + ",\n" +
+                "\"estNodeCycles\": "+invoke.asNode().estimatedNodeCycles().value + "\n" +
+                "}";
+
+        int retries = 3;
+        Exception exception = null;
+        Boolean inline = null;
+        do {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:8001/predict"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(postData))
+                        .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == HttpURLConnection.HTTP_OK) {
+                    Object result = new JsonParser(response.body()).parse();
+                    EconomicMap<String, Object> map = (EconomicMap<String, Object>) result;
+                    inline = (boolean) map.get("result");
+                } else {
+                    throw new Exception("Invalid HTTP status code returned from API. Response: " + response + ", args used: " + postData);
+                }
+            } catch (Exception e) {
+                exception = e;
+            }
+        } while (inline == null && retries-- > 0);
+
+        if (inline == null) {
+            inline = false;
+            System.out.println("API call for inlining failed, defaulting to inline='false'. Error: " + exception);
+        }
+
+        return inline;
+    }
+
     @SuppressWarnings("try")
     public static StructuredGraph decodeGraph(BigBang bb, AnalysisMethod method, AnalysisParsedGraph analysisParsedGraph) {
+        return decodeGraph(bb, method, analysisParsedGraph, 0);
+    }
+
+        @SuppressWarnings("try")
+    public static StructuredGraph decodeGraph(BigBang bb, AnalysisMethod method, AnalysisParsedGraph analysisParsedGraph, int depth) {
         DebugContext.Description description = new DebugContext.Description(method, ClassUtil.getUnqualifiedName(method.getClass()) + ":" + method.getId());
         DebugContext debug = new DebugContext.Builder(bb.getOptions(), new GraalDebugHandlersFactory(bb.getSnippetReflectionProvider())).description(description).build();
 
@@ -71,6 +129,27 @@ public class InlineBeforeAnalysis {
         try (DebugContext.Scope s = debug.scope("InlineBeforeAnalysis", result)) {
             InlineBeforeAnalysisGraphDecoder decoder = bb.getHostVM().createInlineBeforeAnalysisGraphDecoder(bb, method, result);
             decoder.decode(method);
+
+            // 3rd pass
+            if (depth < 10) {
+                for (Invoke invoke : result.getInvokes()) {
+                    AnalysisMethod targetMethod = (AnalysisMethod) invoke.getTargetMethod();
+                    if (invoke.getInvokeKind().isDirect() &&
+                            !targetMethod.hasNeverInlineDirective() &&
+                            invoke.useForInlining() &&
+                            !targetMethod.isIntrinsicMethod() &&
+                            bb.getHostVM().inliningAllowed(method, targetMethod) &&
+                            invoke.getTargetMethod().canBeInlined() &&
+                            InlineBeforeAnalysis.shouldInline(invoke)) {
+                        InliningUtil.inline(
+                                invoke,
+                                decodeGraph(bb, (AnalysisMethod) invoke.getTargetMethod(), targetMethod.ensureGraphParsed(bb), depth + 1),
+                                false,
+                                targetMethod);
+                    }
+                }
+            }
+
             debug.dump(DebugContext.BASIC_LEVEL, result, "InlineBeforeAnalysis after decode");
             return result;
         } catch (Throwable ex) {

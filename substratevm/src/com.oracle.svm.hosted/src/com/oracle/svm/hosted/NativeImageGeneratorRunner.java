@@ -190,6 +190,7 @@ public class NativeImageGeneratorRunner {
         Set<String> expectedBuilderDependencies = Set.of(
                         "java.base",
                         "java.management",
+                        "java.net.http",
                         "java.logging",
                         // workaround for GR-47773 on the module-path which requires java.sql (like
                         // truffle) or java.xml

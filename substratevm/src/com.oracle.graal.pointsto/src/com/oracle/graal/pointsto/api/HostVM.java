@@ -327,6 +327,11 @@ public abstract class HostVM {
         return true;
     }
 
+    @SuppressWarnings("unused")
+    public boolean inliningAllowed(AnalysisMethod caller, AnalysisMethod callee) {
+        return true;
+    }
+
     /**
      * Helpers to determine what analysis actions should be taken for a given Multi-Method version.
      */
