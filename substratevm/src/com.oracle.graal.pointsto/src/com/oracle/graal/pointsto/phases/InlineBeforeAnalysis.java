@@ -131,9 +131,13 @@ public class InlineBeforeAnalysis {
             decoder.decode(method);
 
             // 3rd pass
-            if (depth < 10) {
+            if (depth < 3) {
                 for (Invoke invoke : result.getInvokes()) {
                     AnalysisMethod targetMethod = (AnalysisMethod) invoke.getTargetMethod();
+
+                    if (invoke.asNode().graph().getNodeCount() > 4500)
+                        break;
+
                     if (invoke.getInvokeKind().isDirect() &&
                             !targetMethod.hasNeverInlineDirective() &&
                             invoke.useForInlining() &&
@@ -149,7 +153,6 @@ public class InlineBeforeAnalysis {
                     }
                 }
             }
-
             debug.dump(DebugContext.BASIC_LEVEL, result, "InlineBeforeAnalysis after decode");
             return result;
         } catch (Throwable ex) {
