@@ -140,14 +140,20 @@ public class InlineBeforeAnalysis {
 
                     if (invoke.getInvokeKind().isDirect() &&
                             !targetMethod.hasNeverInlineDirective() &&
-                            invoke.useForInlining() &&
                             !targetMethod.isIntrinsicMethod() &&
+                            !targetMethod.isNative() &&
+                            invoke.useForInlining() &&
                             bb.getHostVM().inliningAllowed(method, targetMethod) &&
                             invoke.getTargetMethod().canBeInlined() &&
                             InlineBeforeAnalysis.shouldInline(invoke)) {
+                        StructuredGraph targetGraph = decodeGraph(bb, (AnalysisMethod) invoke.getTargetMethod(), targetMethod.ensureGraphParsed(bb), depth + 1);
+
+//                        if (invoke.asNode().graph().getNodeCount() + targetGraph.getNodeCount() > 4500)
+//                            break;
+
                         InliningUtil.inline(
                                 invoke,
-                                decodeGraph(bb, (AnalysisMethod) invoke.getTargetMethod(), targetMethod.ensureGraphParsed(bb), depth + 1),
+                                targetGraph,
                                 false,
                                 targetMethod);
                     }
