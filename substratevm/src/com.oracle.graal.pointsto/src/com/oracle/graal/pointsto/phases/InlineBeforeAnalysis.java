@@ -30,8 +30,10 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.util.ClassUtil;
 
 import jdk.graal.compiler.debug.DebugContext;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import jdk.graal.compiler.options.Option;
 import jdk.graal.compiler.options.OptionKey;
@@ -45,6 +47,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Inlining before the static analysis improves the precision of the analysis especially when
@@ -70,13 +76,60 @@ public class InlineBeforeAnalysis {
 
     protected static HttpClient client = HttpClient.newHttpClient();
 
-    protected static boolean shouldInline(Invoke invoke) {
-        String postData = "{\n" +
-                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
-                "\"codeSize\": "+invoke.getTargetMethod().getCodeSize() + ",\n" +
-                "\"maxStackSize\": "+invoke.getTargetMethod().getMaxStackSize() + ",\n" +
-                "\"estNodeCycles\": "+invoke.asNode().estimatedNodeCycles().value + "\n" +
+    protected static String collectNodeMetrics(Node node) {
+        return "{\n" +
+                "\"nodeType\": " + node.getNodeClass().iterableId() + ",\n" +
+                "\"estNodeSize\": " + node.estimatedNodeSize().value + ",\n" +
+                "\"estNodeCycles\": "+node.estimatedNodeCycles().value + "\n" +
                 "}";
+    }
+
+    protected static boolean shouldInline(Invoke invoke) throws Exception {
+        List<String> nodesMetrics = new ArrayList<>(List.of(collectNodeMetrics(invoke.asNode())));
+        List<String> edges = new ArrayList<>();
+
+        int nextNodeId = 1;
+        Node predecessor = invoke.asNode();
+        while (predecessor.predecessor() != null) {
+            // sanity check
+            if (nodesMetrics.size() >= 50)
+                break;
+
+            nodesMetrics.add(collectNodeMetrics(predecessor.predecessor()));
+            edges.add("[%d, %d]".formatted(nextNodeId, nextNodeId-1));
+            nextNodeId++;
+
+            predecessor = predecessor.predecessor();
+        };
+
+        List<AbstractMap.SimpleEntry<Node, Integer>> successors = new ArrayList<>(invoke.asNode().successors().stream()
+                .map(node -> new AbstractMap.SimpleEntry<>(node, 0)).toList());
+        while (!successors.isEmpty()) {
+            // sanity check
+            if (nodesMetrics.size() >= 100)
+                break;
+            Map.Entry<Node, Integer> successor = successors.removeFirst();
+            nodesMetrics.add(collectNodeMetrics(successor.getKey()));
+            edges.add("[%d, %d]".formatted(successor.getValue(), nextNodeId));
+
+            int finalNextNodeId = nextNodeId;
+            successors.addAll(successor.getKey().successors().stream()
+                    .map(node -> new AbstractMap.SimpleEntry<>(node, finalNextNodeId)).toList());
+            nextNodeId++;
+        };
+
+
+        String postData = "{\n" +
+                "\"nodes\": [" + String.join(", ", nodesMetrics) + "],\n" +
+                "\"edges\": [" + String.join(", ", edges) + "],\n" +
+                "}";
+
+//        String postData = "{\n" +
+//                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
+//                "\"codeSize\": "+invoke.getTargetMethod().getCodeSize() + ",\n" +
+//                "\"maxStackSize\": "+invoke.getTargetMethod().getMaxStackSize() + ",\n" +
+//                "\"estNodeCycles\": "+invoke.asNode().estimatedNodeCycles().value + "\n" +
+//                "}";
 
         int retries = 3;
         Exception exception = null;
@@ -88,7 +141,9 @@ public class InlineBeforeAnalysis {
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(postData))
                         .build();
+                // long start = System.currentTimeMillis(); 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                // System.err.println(String.format("response delay: %d", System.currentTimeMillis()-start));
 
                 if (response.statusCode() == HttpURLConnection.HTTP_OK) {
                     Object result = new JsonParser(response.body()).parse();
