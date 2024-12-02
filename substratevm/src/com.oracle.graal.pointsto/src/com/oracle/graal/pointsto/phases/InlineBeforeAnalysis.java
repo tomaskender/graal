@@ -31,6 +31,7 @@ import com.oracle.svm.util.ClassUtil;
 
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -51,6 +52,8 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.StreamSupport;
 
 /**
  * Inlining before the static analysis improves the precision of the analysis especially when
@@ -74,55 +77,102 @@ public class InlineBeforeAnalysis {
         public static final OptionKey<Boolean> InlineBeforeAnalysis = new OptionKey<>(true);
     }
 
-    protected static HttpClient client = HttpClient.newHttpClient();
+    static HttpClient client = HttpClient.newHttpClient();
 
-    protected static String collectNodeMetrics(Node node) {
-        return "{\n" +
-                "\"nodeType\": " + node.getNodeClass().iterableId() + ",\n" +
-                "\"estNodeSize\": " + node.estimatedNodeSize().value + ",\n" +
-                "\"estNodeCycles\": "+node.estimatedNodeCycles().value + "\n" +
-                "}";
+    record GraphNode(int nodeId, int nodeType, int size, int cycles) {
+        public String toJson() {
+            return "{" +
+                    "\"nodeType\": " + nodeType + "," +
+                    "\"size\": " + size + "," +
+                    "\"cycles\": " + cycles +
+                    "}";
+        }
     }
 
-    protected static boolean shouldInline(Invoke invoke) throws Exception {
-        List<String> nodesMetrics = new ArrayList<>(List.of(collectNodeMetrics(invoke.asNode())));
-        List<String> edges = new ArrayList<>();
+    record GraphEdge(GraphNode node1, GraphNode node2) {
+        public String toJson() {
+            return "[%d, %d]".formatted(node1.nodeId(), node2.nodeId());
+        }
+    }
 
-        int nextNodeId = 1;
-        Node predecessor = invoke.asNode();
-        while (predecessor.predecessor() != null) {
+    static GraphNode collectNodeMetrics(FixedNode node, AtomicInteger nextNodeId) {
+        return new GraphNode(nextNodeId.getAndIncrement(), node.getNodeClass().iterableId(), node.estimatedNodeSize().value, node.estimatedNodeCycles().value);
+    }
+
+    static Graph getValuePredecessorsGraph(FixedNode rootNode, GraphNode rootGraphNode, AtomicInteger nextNodeId) {
+        List<GraphNode> valuePredecessors = rootNode.inputs().stream()
+                .map(input -> new GraphNode(nextNodeId.getAndIncrement(), input.getNodeClass().iterableId(), input.estimatedNodeSize().value, input.estimatedNodeCycles().value))
+                .toList();
+        return new Graph(valuePredecessors, valuePredecessors.stream().map(v -> new GraphEdge(v, rootGraphNode)).toList());
+    }
+
+    record Graph(List<GraphNode> nodes, List<GraphEdge> edges) {
+        public String toJson() {
+            return "{\n" +
+                "\"nodes\": [" + String.join(", ", nodes().stream().map(GraphNode::toJson).toList()) + "],\n" +
+                "\"edges\": [" + String.join(", ", edges().stream().map(GraphEdge::toJson).toList()) + "]\n" +
+                "}";
+        }
+    }
+
+    static Graph buildGraph(FixedNode node, AtomicInteger nextNodeId) {
+        List<GraphNode> nodes = new ArrayList<>();
+        List<GraphEdge> edges = new ArrayList<>();
+
+        GraphNode graphNode = collectNodeMetrics(node, nextNodeId);
+        nodes.add(graphNode);
+
+        {
+            Graph predecessorsGraph = getValuePredecessorsGraph(node, graphNode, nextNodeId);
+            nodes.addAll(predecessorsGraph.nodes());
+            edges.addAll(predecessorsGraph.edges());
+        }
+
+        List<AbstractMap.SimpleEntry<? extends Node, GraphNode>> predecessors = new ArrayList<>(StreamSupport.stream(node.cfgPredecessors().spliterator(), false)
+                .map(predecessor -> new AbstractMap.SimpleEntry<>(predecessor, graphNode)).toList());
+        while (!predecessors.isEmpty()) {
             // sanity check
-            if (nodesMetrics.size() >= 50)
+            if (nodes.size() >= 50)
                 break;
+            Map.Entry<? extends Node, GraphNode> predecessor = predecessors.removeFirst();
+            GraphNode currentGraphNode = collectNodeMetrics((FixedNode) predecessor.getKey(), nextNodeId);
+            nodes.add(currentGraphNode);
+            edges.add(new GraphEdge(currentGraphNode, predecessor.getValue()));
 
-            nodesMetrics.add(collectNodeMetrics(predecessor.predecessor()));
-            edges.add("[%d, %d]".formatted(nextNodeId, nextNodeId-1));
-            nextNodeId++;
+            Graph predecessorsGraph = getValuePredecessorsGraph((FixedNode) predecessor.getKey(), currentGraphNode, nextNodeId);
+            nodes.addAll(predecessorsGraph.nodes());
+            edges.addAll(predecessorsGraph.edges());
 
-            predecessor = predecessor.predecessor();
+            predecessors.addAll(StreamSupport.stream(predecessor.getKey().cfgPredecessors().spliterator(), false)
+                    .map(predecessorNode -> new AbstractMap.SimpleEntry<>(predecessorNode, currentGraphNode)).toList());
         };
 
-        List<AbstractMap.SimpleEntry<Node, Integer>> successors = new ArrayList<>(invoke.asNode().successors().stream()
-                .map(node -> new AbstractMap.SimpleEntry<>(node, 0)).toList());
+        List<AbstractMap.SimpleEntry<? extends Node, GraphNode>> successors = new ArrayList<>(StreamSupport.stream(node.cfgSuccessors().spliterator(), false)
+                .map(successor -> new AbstractMap.SimpleEntry<>(successor, graphNode)).toList());
         while (!successors.isEmpty()) {
             // sanity check
-            if (nodesMetrics.size() >= 100)
+            if (nodes.size() >= 100)
                 break;
-            Map.Entry<Node, Integer> successor = successors.removeFirst();
-            nodesMetrics.add(collectNodeMetrics(successor.getKey()));
-            edges.add("[%d, %d]".formatted(successor.getValue(), nextNodeId));
+            Map.Entry<? extends Node, GraphNode> successor = successors.removeFirst();
+            GraphNode currentGraphNode = collectNodeMetrics((FixedNode) successor.getKey(), nextNodeId);
+            nodes.add(currentGraphNode);
+            edges.add(new GraphEdge(successor.getValue(), currentGraphNode));
 
-            int finalNextNodeId = nextNodeId;
+            Graph predecessorsGraph = getValuePredecessorsGraph((FixedNode) successor.getKey(), currentGraphNode, nextNodeId);
+            nodes.addAll(predecessorsGraph.nodes());
+            edges.addAll(predecessorsGraph.edges());
+
             successors.addAll(successor.getKey().successors().stream()
-                    .map(node -> new AbstractMap.SimpleEntry<>(node, finalNextNodeId)).toList());
-            nextNodeId++;
+                    .map(successorNode -> new AbstractMap.SimpleEntry<>(successorNode, currentGraphNode)).toList());
         };
 
+        return new Graph(nodes, edges);
+    }
 
-        String postData = "{\n" +
-                "\"nodes\": [" + String.join(", ", nodesMetrics) + "],\n" +
-                "\"edges\": [" + String.join(", ", edges) + "],\n" +
-                "}";
+    protected static boolean shouldInline(Invoke invoke) {
+        AtomicInteger nextNodeId = new AtomicInteger(0);
+        Graph graph = buildGraph(invoke.asFixedNode(), nextNodeId);
+        String postData = graph.toJson();
 
 //        String postData = "{\n" +
 //                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
