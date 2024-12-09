@@ -169,10 +169,20 @@ public class InlineBeforeAnalysis {
         return new Graph(nodes, edges);
     }
 
-    protected static boolean shouldInline(Invoke invoke) {
+    protected static boolean shouldInline(Invoke invoke, StructuredGraph targetGraph) {
         AtomicInteger nextNodeId = new AtomicInteger(0);
-        Graph graph = buildGraph(invoke.asFixedNode(), nextNodeId);
-        String postData = graph.toJson();
+        Graph callerGraph = buildGraph(invoke.asFixedNode(), nextNodeId);
+        Graph calleeGraph = buildGraph(targetGraph.start(), nextNodeId);
+
+        List<GraphNode> joinedNodes = new ArrayList<>();
+        joinedNodes.addAll(callerGraph.nodes());
+        joinedNodes.addAll(calleeGraph.nodes());
+
+        List<GraphEdge> joinedEdges = new ArrayList<>();
+        joinedEdges.addAll(callerGraph.edges());
+        joinedEdges.addAll(calleeGraph.edges());
+
+        String postData = new Graph(joinedNodes, joinedEdges).toJson();
 
 //        String postData = "{\n" +
 //                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
@@ -249,18 +259,19 @@ public class InlineBeforeAnalysis {
                             !targetMethod.isNative() &&
                             invoke.useForInlining() &&
                             bb.getHostVM().inliningAllowed(method, targetMethod) &&
-                            invoke.getTargetMethod().canBeInlined() &&
-                            InlineBeforeAnalysis.shouldInline(invoke)) {
+                            invoke.getTargetMethod().canBeInlined()) {
                         StructuredGraph targetGraph = decodeGraph(bb, (AnalysisMethod) invoke.getTargetMethod(), targetMethod.ensureGraphParsed(bb), depth + 1);
 
+                        if (InlineBeforeAnalysis.shouldInline(invoke, targetGraph)) {
 //                        if (invoke.asNode().graph().getNodeCount() + targetGraph.getNodeCount() > 4500)
 //                            break;
 
-                        InliningUtil.inline(
-                                invoke,
-                                targetGraph,
-                                false,
-                                targetMethod);
+                            InliningUtil.inline(
+                                    invoke,
+                                    targetGraph,
+                                    false,
+                                    targetMethod);
+                        }
                     }
                 }
             }
