@@ -33,6 +33,7 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
@@ -52,7 +53,9 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
 /**
@@ -79,12 +82,12 @@ public class InlineBeforeAnalysis {
 
     static HttpClient client = HttpClient.newHttpClient();
 
-    record GraphNode(int nodeId, int nodeType, int size, int cycles) {
+    record GraphNode(int nodeId, Node node) {
         public String toJson() {
             return "{" +
-                    "\"nodeType\": " + nodeType + "," +
-                    "\"size\": " + size + "," +
-                    "\"cycles\": " + cycles +
+                    "\"nodeType\": " + node.getNodeClass().iterableId() + "," +
+                    "\"size\": " + node.estimatedNodeSize().value + "," +
+                    "\"cycles\": " + node.estimatedNodeCycles().value +
                     "}";
         }
     }
@@ -96,12 +99,12 @@ public class InlineBeforeAnalysis {
     }
 
     static GraphNode collectNodeMetrics(FixedNode node, AtomicInteger nextNodeId) {
-        return new GraphNode(nextNodeId.getAndIncrement(), node.getNodeClass().iterableId(), node.estimatedNodeSize().value, node.estimatedNodeCycles().value);
+        return new GraphNode(nextNodeId.getAndIncrement(), node);
     }
 
     static Graph getValuePredecessorsGraph(FixedNode rootNode, GraphNode rootGraphNode, AtomicInteger nextNodeId) {
         List<GraphNode> valuePredecessors = rootNode.inputs().stream()
-                .map(input -> new GraphNode(nextNodeId.getAndIncrement(), input.getNodeClass().iterableId(), input.estimatedNodeSize().value, input.estimatedNodeCycles().value))
+                .map(input -> new GraphNode(nextNodeId.getAndIncrement(), input))
                 .toList();
         return new Graph(valuePredecessors, valuePredecessors.stream().map(v -> new GraphEdge(v, rootGraphNode)).toList());
     }
@@ -169,10 +172,41 @@ public class InlineBeforeAnalysis {
         return new Graph(nodes, edges);
     }
 
+    static void replaceArgumentNodesInCalleeGraph(Graph callerGraph, List<? extends Node> callerArguments, Graph calleeGraph, List<? extends Node> calleeArguments) {
+        IntStream.range(0, Math.min(callerArguments.size(), calleeArguments.size())).forEach(i -> {
+            // replace method parameter
+            Optional<GraphNode> originalGraphNode = calleeGraph.nodes().stream().filter(n -> n.node == calleeArguments.get(i)).findAny();
+            if (originalGraphNode.isEmpty())
+                return;
+
+            // with invoke argument
+            Optional<GraphNode> replacementGraphNode = callerGraph.nodes().stream().filter(n -> n.node == callerArguments.get(i)).findAny();
+            if (replacementGraphNode.isEmpty())
+                return;
+
+            // perform replacement
+            calleeGraph.nodes().remove(calleeGraph.nodes.indexOf(originalGraphNode.get())); // callerGraph already contains this node, no need to duplicate it in the unified list
+            calleeGraph.edges().replaceAll(edge -> {
+                if (edge.node1 == originalGraphNode.get())
+                    return new GraphEdge(replacementGraphNode.get(), edge.node2);
+                else if (edge.node2 == originalGraphNode.get())
+                    return new GraphEdge(edge.node1, replacementGraphNode.get());
+                return edge;
+            });
+        });
+    }
+
     protected static boolean shouldInline(Invoke invoke, StructuredGraph targetGraph) {
         AtomicInteger nextNodeId = new AtomicInteger(0);
         Graph callerGraph = buildGraph(invoke.asFixedNode(), nextNodeId);
         Graph calleeGraph = buildGraph(targetGraph.start(), nextNodeId);
+
+        replaceArgumentNodesInCalleeGraph(
+                callerGraph,
+                invoke.callTarget().arguments().stream().toList(),
+                calleeGraph,
+                targetGraph.getNodes(ParameterNode.TYPE).stream().toList()
+        );
 
         List<GraphNode> joinedNodes = new ArrayList<>();
         joinedNodes.addAll(callerGraph.nodes());
