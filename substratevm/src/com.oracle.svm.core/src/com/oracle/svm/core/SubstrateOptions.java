@@ -828,7 +828,7 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> UseNullRegion = new HostedOptionKey<>(true);
 
     @Option(help = "The interval in minutes between watchdog checks (0 disables the watchdog)", type = OptionType.Expert)//
-    public static final HostedOptionKey<Integer> DeadlockWatchdogInterval = new HostedOptionKey<>(10);
+    public static final HostedOptionKey<Integer> DeadlockWatchdogInterval = new HostedOptionKey<>(0);
     @Option(help = "Exit the image builder VM after printing call stacks", type = OptionType.Expert)//
     public static final HostedOptionKey<Boolean> DeadlockWatchdogExitOnTimeout = new HostedOptionKey<>(true);
 

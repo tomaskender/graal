@@ -297,181 +297,10 @@ public class InlineBeforeAnalysis {
     }
 
     static HttpClient client = HttpClient.newHttpClient();
-    static List<Class> classes = List.of(
-            InvokeNode.class,
-            LogicNegationNode.class,
-            ConstantNode.class,
-            ValuePhiNode.class,
-            NewMultiArrayNode.class,
-            LoadFieldNode.class,
-            LoweredAtomicReadAndWriteNode.class,
-            UnsafeCompareAndSwapNode.class,
-            DynamicNewInstanceWithExceptionNode.class,
-            TypeSwitchNode.class,
-            ArrayLengthNode.class,
-            UnsafeCompareAndExchangeNode.class,
-            AtomicReadAndAddNode.class,
-            LoadIndexedNode.class,
-            NewInstanceWithExceptionNode.class,
-            NewArrayNode.class,
-            InstanceOfNode.class,
-            StoreFieldNode.class,
-            LoadExceptionObjectNode.class,
-            StoreIndexedNode.class,
-            NewArrayWithExceptionNode.class,
-            LogicCompareAndSwapNode.class,
-            InstanceOfDynamicNode.class,
-            DynamicNewArrayNode.class,
-            AtomicReadAndWriteNode.class,
-            ValueCompareAndSwapNode.class,
-            MethodCallTargetNode.class,
-            NewMultiArrayWithExceptionNode.class,
-            ReachabilityFenceNode.class,
-            DynamicNewArrayWithExceptionNode.class,
-            DynamicNewInstanceNode.class,
-            NewInstanceNode.class,
-            LoweredAtomicReadAndAddNode.class,
-            ExceptionObjectNode.class,
-            DynamicCounterNode.class,
-            SideEffectNode.class,
-            StringToBytesNode.class,
-            UnreachableNode.class,
-            DynamicPiNode.class,
-            IfNode.class,
-            LoopExitNode.class,
-            PiArrayNode.class,
-            IntegerTestNode.class,
-            SqrtNode.class,
-            FloatConvertNode.class,
-            XorNode.class,
-            NarrowNode.class,
-            IntegerBelowNode.class,
-            FloatDivNode.class,
-            ConditionalNode.class,
-            NotNode.class,
-            IntegerLessThanNode.class,
-            ZeroExtendNode.class,
-            SignedRemNode.class,
-            RightShiftNode.class,
-            RoundFloatToIntegerNode.class,
-            AbsNode.class,
-            CopySignNode.class,
-            SignumNode.class,
-            SignedDivNode.class,
-            UnsignedRightShiftNode.class,
-            NegateNode.class,
-            SubNode.class,
-            SignExtendNode.class,
-            ObjectEqualsNode.class,
-            AndNode.class,
-            FloatLessThanNode.class,
-            FloatNormalizeCompareNode.class,
-            ExpandBitsNode.class,
-            SignedFloatingIntegerRemNode.class,
-            UnsignedDivNode.class,
-            UnsignedMaxNode.class,
-            OrNode.class,
-            FloatTypeTestNode.class,
-            FloatEqualsNode.class,
-            IntegerEqualsNode.class,
-            IsNullNode.class,
-            MinNode.class,
-            MaxNode.class,
-            OpMaskTestNode.class,
-            AddNode.class,
-            MulNode.class,
-            IntegerNormalizeCompareNode.class,
-            PointerEqualsNode.class,
-            ReinterpretNode.class,
-            LeftShiftNode.class,
-            RoundNode.class,
-            SignedFloatingIntegerDivNode.class,
-            UnsignedMinNode.class,
-            ShortCircuitOrNode.class,
-            MergeNode.class,
-            PauseNode.class,
-            ConditionAnchorNode.class,
-            SpinWaitNode.class,
-            StartNode.class,
-            BeginNode.class,
-            DeadEndNode.class,
-            ComputeObjectAddressNode.class,
-            UnwindNode.class,
-            AllocatedObjectNode.class,
-            CommitAllocationNode.class,
-            VirtualBoxingNode.class,
-            VirtualInstanceNode.class,
-            VirtualArrayNode.class,
-            EnsureVirtualizedNode.class,
-            ValueProxyNode.class,
-            GetObjectAddressNode.class,
-            SwitchCaseProbabilityNode.class,
-            LoadArrayComponentHubNode.class,
-            IntegerSwitchNode.class,
-            ValueAnchorNode.class,
-            UnsafeMemoryLoadNode.class,
-            ClassIsArrayNode.class,
-            ForeignCallNode.class,
-            NullCheckNode.class,
-            OpaqueLogicNode.class,
-            LoadHubOrNullNode.class,
-            UnsafeMemoryStoreNode.class,
-            UnsafeCopyNode.class,
-            ObjectIsArrayNode.class,
-            StateSplitProxyNode.class,
-            OpaqueValueNode.class,
-            SpeculationFenceNode.class,
-            GuardedUnsafeLoadNode.class,
-            RawLoadNode.class,
-            JavaReadNode.class,
-            BranchProbabilityNode.class,
-            GetClassNode.class,
-            BytecodeExceptionNode.class,
-            LoadMethodNode.class,
-            JavaWriteNode.class,
-            CaptureStateBeginNode.class,
-            UnboxNode.class,
-            ForeignCallWithExceptionNode.class,
-            MemoryMapNode.class,
-            WriteNode.class,
-            MemoryPhiNode.class,
-            ReadNode.class,
-            OffsetAddressNode.class,
-            IndexAddressNode.class,
-            FloatingReadNode.class,
-            SideEffectFreeWriteNode.class,
-            MemoryAnchorNode.class,
-            UnreachableControlSinkNode.class,
-            IndirectCallTargetNode.class,
-            DirectCallTargetNode.class,
-            LoopBeginNode.class,
-            ReturnNode.class,
-            InvokeWithExceptionNode.class,
-            GuardedValueNode.class,
-            ParameterNode.class,
-            FixedGuardNode.class,
-            PiNode.class,
-            LogicConstantNode.class,
-            EndNode.class,
-            LoopEndNode.class,
-            FrameState.class
-    );
-
-    static int getNodeClassId(Class c) {
-        return classes.indexOf(c)+1;
-    }
-
-    record GraphNode(int nodeId, Node node) {
-        public String toJson() {
-            return "{" +
-                    "\"nodeType\": " + getNodeClassId(node.getClass()) +
-                    "}";
-        }
-    }
 
     record GraphEdge(GraphNode node1, GraphNode node2) {
         public String toJson() {
-            return "[%d, %d]".formatted(node1.nodeId(), node2.nodeId());
+            return "[%d, %d]".formatted(node1.nodeId, node2.nodeId);
         }
     }
 
@@ -482,7 +311,7 @@ public class InlineBeforeAnalysis {
     static Graph getValuePredecessorsGraph(FixedNode rootNode, GraphNode rootGraphNode, AtomicInteger nextNodeId) {
         List<GraphNode> valuePredecessors = rootNode.inputs().stream()
                 .map(input -> new GraphNode(nextNodeId.getAndIncrement(), input))
-                .toList();https://www.linkedin.com/in/karel-bene%C5%A1-967554176/
+                .toList();
         return new Graph(valuePredecessors, valuePredecessors.stream().map(v -> new GraphEdge(v, rootGraphNode)).toList());
     }
 
@@ -510,10 +339,7 @@ public class InlineBeforeAnalysis {
 
         List<AbstractMap.SimpleEntry<? extends Node, GraphNode>> predecessors = new ArrayList<>(StreamSupport.stream(node.cfgPredecessors().spliterator(), false)
                 .map(predecessor -> new AbstractMap.SimpleEntry<>(predecessor, graphNode)).toList());
-        while (!predecessors.isEmpty()) {
-            // sanity check
-            if (nodes.size() >= 50)
-                break;
+        while (!predecessors.isEmpty() && edges.size() < 10) {
             Map.Entry<? extends Node, GraphNode> predecessor = predecessors.removeFirst();
             GraphNode currentGraphNode = collectNodeMetrics((FixedNode) predecessor.getKey(), nextNodeId);
             nodes.add(currentGraphNode);
@@ -529,10 +355,7 @@ public class InlineBeforeAnalysis {
 
         List<AbstractMap.SimpleEntry<? extends Node, GraphNode>> successors = new ArrayList<>(StreamSupport.stream(node.cfgSuccessors().spliterator(), false)
                 .map(successor -> new AbstractMap.SimpleEntry<>(successor, graphNode)).toList());
-        while (!successors.isEmpty()) {
-            // sanity check
-            if (nodes.size() >= 100)
-                break;
+        while (!successors.isEmpty() && edges.size() < 20) {
             Map.Entry<? extends Node, GraphNode> successor = successors.removeFirst();
             GraphNode currentGraphNode = collectNodeMetrics((FixedNode) successor.getKey(), nextNodeId);
             nodes.add(currentGraphNode);
@@ -570,10 +393,16 @@ public class InlineBeforeAnalysis {
                     return new GraphEdge(edge.node1, replacementGraphNode.get());
                 return edge;
             });
+
+            // after removing a node from callee graph, we need to decrease subsequent node ids to keep up the continuity of ID indexing
+            calleeGraph.nodes().forEach(node -> {
+                if (node.nodeId > originalGraphNode.get().nodeId)
+                    node.nodeId--;
+            });
         });
     }
 
-    protected static boolean shouldInline(Invoke invoke, StructuredGraph targetGraph) {
+    protected static String getGraphPostData(Invoke invoke, StructuredGraph targetGraph)  {
         AtomicInteger nextNodeId = new AtomicInteger(0);
         Graph callerGraph = buildGraph(invoke.asFixedNode(), nextNodeId);
         Graph calleeGraph = buildGraph(targetGraph.start(), nextNodeId);
@@ -593,7 +422,11 @@ public class InlineBeforeAnalysis {
         joinedEdges.addAll(callerGraph.edges());
         joinedEdges.addAll(calleeGraph.edges());
 
-        String postData = new Graph(joinedNodes, joinedEdges).toJson();
+        return new Graph(joinedNodes, joinedEdges).toJson();
+    }
+
+    protected static boolean shouldInline(Invoke invoke, StructuredGraph targetGraph) {
+        String postData = getGraphPostData(invoke, targetGraph);
 
 //        String postData = "{\n" +
 //                "\"estNodeSize\": " + invoke.asNode().estimatedNodeSize().value + ",\n" +
@@ -691,5 +524,27 @@ public class InlineBeforeAnalysis {
         } catch (Throwable ex) {
             throw debug.handle(ex);
         }
+    }
+}
+
+class GraphNode {
+    public int nodeId;
+    public Node node;
+
+    public GraphNode(int nodeId, Node node) {
+        this.nodeId = nodeId;
+        this.node = node;
+    }
+
+    static List<Class> classes = List.of( InvokeNode.class, LogicNegationNode.class, ConstantNode.class, ValuePhiNode.class, NewMultiArrayNode.class, LoadFieldNode.class, LoweredAtomicReadAndWriteNode.class, UnsafeCompareAndSwapNode.class, DynamicNewInstanceWithExceptionNode.class, TypeSwitchNode.class, ArrayLengthNode.class, MonitorIdNode.class, UnsafeCompareAndExchangeNode.class, ValidateNewInstanceClassNode.class, AtomicReadAndAddNode.class, LoadIndexedNode.class, NewInstanceWithExceptionNode.class, NewArrayNode.class, InstanceOfNode.class, StoreFieldNode.class, LoadExceptionObjectNode.class, StoreIndexedNode.class, NewArrayWithExceptionNode.class, LogicCompareAndSwapNode.class, InstanceOfDynamicNode.class, ClassIsAssignableFromNode.class, MonitorEnterNode.class, DynamicNewArrayNode.class, AtomicReadAndWriteNode.class, ValueCompareAndSwapNode.class, MethodCallTargetNode.class, NewMultiArrayWithExceptionNode.class, DynamicNewArrayWithExceptionNode.class, DynamicNewInstanceNode.class, MonitorExitNode.class, NewInstanceNode.class, ExceptionObjectNode.class, GuardPhiNode.class, UnreachableNode.class, DynamicPiNode.class, IfNode.class, LoopExitNode.class, PiArrayNode.class, IntegerTestNode.class, SqrtNode.class, FloatConvertNode.class, UnpackEndianHalfNode.class, XorNode.class, NarrowNode.class, IntegerBelowNode.class, FloatDivNode.class, RemNode.class, CompressBitsNode.class, ConditionalNode.class, NotNode.class, IntegerLessThanNode.class, ZeroExtendNode.class, SignedRemNode.class, RightShiftNode.class, RoundFloatToIntegerNode.class, AbsNode.class, CopySignNode.class, SignumNode.class, SignedDivNode.class, UnsignedRightShiftNode.class, NegateNode.class, SubNode.class, SignExtendNode.class, ObjectEqualsNode.class, AndNode.class, FloatLessThanNode.class, FloatNormalizeCompareNode.class, ExpandBitsNode.class, SignedFloatingIntegerRemNode.class, UnsignedDivNode.class, UnsignedMaxNode.class, OrNode.class, FloatTypeTestNode.class, FloatEqualsNode.class, UnsignedRemNode.class, IntegerEqualsNode.class, IntegerMulHighNode.class, IsNullNode.class, MinNode.class, OpMaskOrTestNode.class, MaxNode.class, OpMaskTestNode.class, AddNode.class, MulNode.class, IntegerNormalizeCompareNode.class, PointerEqualsNode.class, ReinterpretNode.class, LeftShiftNode.class, RoundNode.class, SignedFloatingIntegerDivNode.class, UnsignedMinNode.class, ShortCircuitOrNode.class, MergeNode.class, ConditionAnchorNode.class, StartNode.class, BeginNode.class, DeadEndNode.class, UnwindNode.class, AllocatedObjectNode.class, CommitAllocationNode.class, VirtualBoxingNode.class, VirtualInstanceNode.class, VirtualArrayNode.class, EnsureVirtualizedNode.class, ValueProxyNode.class, GetObjectAddressNode.class, SwitchCaseProbabilityNode.class, LoadArrayComponentHubNode.class, OSRMonitorEnterNode.class, FixedValueAnchorNode.class, LoadHubNode.class, StoreHubNode.class, IntegerSwitchNode.class, ValueAnchorNode.class, UnsafeMemoryLoadNode.class, ClassIsArrayNode.class, ForeignCallNode.class, NullCheckNode.class, OpaqueLogicNode.class, LoadHubOrNullNode.class, UnsafeMemoryStoreNode.class, UnsafeCopyNode.class, OSRLockNode.class, MembarNode.class, ObjectIsArrayNode.class, StateSplitProxyNode.class, OpaqueValueNode.class, GuardedUnsafeLoadNode.class, RawLoadNode.class, JavaReadNode.class, BranchProbabilityNode.class, GetClassNode.class, OSRStartNode.class, BytecodeExceptionNode.class, LoadMethodNode.class, JavaWriteNode.class, MultiGuardNode.class, OSRLocalNode.class, OpaqueGuardNode.class, CaptureStateBeginNode.class, UnboxNode.class, ForeignCallWithExceptionNode.class, MemoryPhiNode.class, ReadNode.class, OffsetAddressNode.class, IndexAddressNode.class, FloatingReadNode.class, SideEffectFreeWriteNode.class, MemoryAnchorNode.class, UnreachableControlSinkNode.class, IndirectCallTargetNode.class, DirectCallTargetNode.class, GuardNode.class, LoopBeginNode.class, ReturnNode.class, EntryMarkerNode.class, InvokeWithExceptionNode.class, GuardProxyNode.class, SafepointNode.class, UnreachableBeginNode.class, SnippetAnchorNode.class, GuardedValueNode.class, ParameterNode.class, DynamicDeoptimizeNode.class, MemoryProxyNode.class, FixedGuardNode.class, PiNode.class, LogicConstantNode.class, EndNode.class, LoopEndNode.class, EntryProxyNode.class, FrameState.class );
+
+    static int getNodeClassId(Class c) {
+        return classes.indexOf(c)+1;
+    }
+
+    public String toJson() {
+        return "{" +
+                "\"nodeType\": " + getNodeClassId(node.getClass()) +
+                "}";
     }
 }
